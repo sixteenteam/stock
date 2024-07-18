@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-time Stock Info</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const userId = 'user1'; // 고정된 사용자 ID (실제 구현에서는 로그인 등으로 동적으로 설정)
+            const ws = new WebSocket('ws://localhost:3000');
+
+            const ctx = document.getElementById('stockChart').getContext('2d');
+            const stockChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [], // 시간 또는 인덱스
+                    datasets: [{
+                        label: 'Stock Price',
+                        data: [], // 주식 시세
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 1,
+                        fill: false
+                    }]
+                },
+                options: {
+                    scales: {
+                        x: {
+                            type: 'linear',
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+
+            ws.onopen = () => {
+                console.log('WebSocket connection opened');
+                ws.send(JSON.stringify({ action: 'getAllStockInfo', pageNo: 1, numOfRows: 100 }));
+            };
+
+            ws.onmessage = (event) => {
+                const message = JSON.parse(event.data);
+                if (message.action === 'stockInfo' || message.action === 'stockUpdate') {
+                    const stockTable = document.getElementById('stock-table');
+                    stockTable.innerHTML = '';
+                    stockChart.data.labels = [];
+                    stockChart.data.datasets[0].data = [];
+                    message.data.forEach((stock, index) => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `<td>${stock.srtnCd}</td><td>${stock.itmsNm}</td><td>${stock.clpr}</td>`;
+                        stockTable.appendChild(row);
+
+                        // 그래프 업데이트
+                        stockChart.data.labels.push(index);
+                        stockChart.data.datasets[0].data.push(stock.clpr);
+                    });
+                    stockChart.update();
+                } else if (message.action === 'buyStock' || message.action === 'sellStock') {
+                    alert(`Action: ${message.action}, Status: ${message.status}, Message: ${message.message || ''}`);
+                }
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+            };
+
+            ws.onclose = () => {
+                console.log('WebSocket connection closed');
+            };
+
+            document.getElementById('getAllStocks').addEventListener('click', () => {
+                ws.send(JSON.stringify({ action: 'getAllStockInfo', pageNo: 1, numOfRows: 100 }));
+            });
+
+            document.getElementById('buyStockButton').addEventListener('click', () => {
+                const stockCode = document.getElementById('stockCode').value;
+                const amount = parseInt(document.getElementById('amount').value, 10);
+                ws.send(JSON.stringify({ action: 'buyStock', userId, stockCode, amount }));
+            });
+
+            document.getElementById('sellStockButton').addEventListener('click', () => {
+                const stockCode = document.getElementById('stockCode').value;
+                const amount = parseInt(document.getElementById('amount').value, 10);
+                ws.send(JSON.stringify({ action: 'sellStock', userId, stockCode, amount }));
+            });
+        });
+    </script>
+</head>
+<body>
+    <h1>Real-time Stock Info</h1>
+    <button id="getAllStocks">Get All Stocks Info</button>
+    <table border="1">
+        <thead>
+            <tr>
+                <th>Stock Code</th>
+                <th>Name</th>
+                <th>Price</th>
+            </tr>
+        </thead>
+        <tbody id="stock-table">
+        </tbody>
+    </table>
+    <h2>Buy/Sell Stock</h2>
+    <div>
+        <label for="stockCode">Stock Code:</label>
+        <input type="text" id="stockCode" value="005930"> <!-- Default value for Samsung Electronics -->
+    </div>
+    <div>
+        <label for="amount">Amount:</label>
+        <input type="number" id="amount" value="1">
+    </div>
+    <button id="buyStockButton">Buy Stock</button>
+    <button id="sellStockButton">Sell Stock</button>
+
+    <h2>Real-time Stock Price Chart</h2>
+    <canvas id="stockChart" width="400" height="200"></canvas>
+</body>
+</html>
